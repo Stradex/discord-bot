@@ -1,0 +1,4 @@
+venv/
+.*.sw*
+.vim
+.env
