@@ -2,3 +2,4 @@ venv/
 .*.sw*
 *.vim
 .env
+__pycache__/
