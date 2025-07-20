@@ -38,8 +38,26 @@ def irc_bot(message_queue):
     else:
       print(f"Invited from a non-whitelisted channel: {channel}")
 
+
   def on_connect(connection, event):
     print("Connected to server sucessfully")
+    connection.cap('REQ', 'sasl')
+
+  def on_cap(connection, event):
+    print("cap response")
+    if 'ACK' in event.arguments[0] and 'sasl' in event.arguments[0]:
+      connection.send_raw("AUTHENTICATE PLAIN")
+
+  def on_authenticate(connection, event):
+    print("authenticate response")
+    auth_str = f"\0{IRC_USERNAME}\0{IRC_PASSWORD}"
+    b64_auth = base64.b64encode(auth_str.encode()).decode()
+    connection.send_raw(f"AUTHENTICATE {b64_auth}")
+
+  def on_sasl_success(connection, event):
+    connection.cap('END')
+    print("Connected to server sucessfully with sasl")
+    #connection.join("#yourchannel")
 
   def on_join(connection, event):
     connection.privmsg(IRC_CHANNEL, "Hello from Python IRC bot!")
@@ -72,6 +90,9 @@ def irc_bot(message_queue):
   c.add_global_handler("join", on_join)
   c.add_global_handler("invite", on_invite)
   c.add_global_handler("pubmsg", on_pubmsg)
+  c.add_global_handler("cap", on_cap)
+  c.add_global_handler("authenticate", on_authenticate)
+  c.add_global_handler("903", on_sasl_success)  # SASL success numeric
 
   threading.Thread(target=send_from_discord, daemon=True).start()
 
