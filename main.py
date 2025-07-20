@@ -3,21 +3,32 @@ import asyncio
 import queue
 import discord
 import irc.client
+import irc.connection
 from dotenv import load_dotenv
 import os
+import ssl
 
 load_dotenv()
 IRC_CHANNEL = os.getenv("IRC_CHANNEL")
 IRC_SERVER = os.getenv("IRC_SERVER")
 IRC_PORT = int(os.getenv("IRC_PORT"))
 IRC_BOT_NAME = os.getenv("IRC_BOT_NAME")
+IRC_USERNAME = os.getenv("IRC_USERNAME")
+IRC_PASSWORD = os.getenv("IRC_PASSWORD")
 DISCORD_BOT_TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 DISCORD_CHANNEL_ID = int(os.getenv("DISCORD_CHANNEL_ID"))
 
 message_queue = queue.Queue()
 
 def irc_bot(message_queue):
+
   client = irc.client.Reactor()
+#  client.add_global_handler("all_events", print)  # shows all events
+  ssl_context = ssl.create_default_context()
+  factory = irc.connection.Factory(
+    wrapper=lambda sock: ssl_context.wrap_socket(sock, server_hostname=IRC_SERVER)
+  )
+
 
   def on_invite(connection, event):
     channel = event.arguments[0]
@@ -49,9 +60,12 @@ def irc_bot(message_queue):
         print("Error sending to IRC:", e)
 
   try:
-    c = client.server().connect(IRC_SERVER, IRC_PORT, IRC_BOT_NAME)
-  except irc.client.ServerConnectionError:
-    print("Connection failed.")
+    c = client.server().connect(IRC_SERVER, IRC_PORT, IRC_BOT_NAME,
+          password=IRC_PASSWORD,
+          username=IRC_USERNAME,
+          connect_factory=factory)
+  except irc.client.ServerConnectionError as e:
+    print("Connection failed: ", e)
     return
 
   c.add_global_handler("welcome", on_connect)
