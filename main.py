@@ -34,68 +34,53 @@ config = {
   ],
   'autojoins': [],
   'verbose': True,
-  'timeout': 60,
+  'timeout': 120,
+  'loop': asyncio.new_event_loop(),
 }
 
 @irc3.plugin
 class IRCDiscordBot:
-    def __init__(self, bot):
-        self.bot = bot
+  def __init__(self, bot):
+    self.bot = bot
 
-    @irc3.event(r'^:\S+ INVITE (?P<botnick>\S+) :(?P<channel>\S+)$')
-    def on_invite(self, botnick=None, channel=None):
-        print(f"Invited to channel {channel}")
-        self.bot.join(channel)
+  @irc3.event(r'^:\S+ INVITE (?P<botnick>\S+) :(?P<channel>\S+)$')
+  def on_invite(self, botnick=None, channel=None):
+    print(f"Invited to channel {channel}")
+    if channel == IRC_CHANNEL:
+      self.bot.join(channel)
+    else:
+      print(f"Bot ignored invitation from {channel}")
 
-    @irc3.event(irc3.rfc.JOIN)
-    def on_join(self, mask, channel, **kw):
-        if mask.nick == self.bot.nick:
-            print(f"Joined {channel}")
-            self.bot.privmsg(channel, "Hello world")
+  @irc3.event(irc3.rfc.JOIN)
+  def on_join(self, mask, channel, **kw):
+    if mask.nick == self.bot.nick:
+      print(f"Joined {channel}")
+      self.bot.privmsg(channel, "Hello world")
 
+  @irc3.event(irc3.rfc.PRIVMSG)
+  def on_pubmsg(self, mask, event, target, data, **kwargs):
+    if target.startswith('#'):
+      user = mask.nick
+      text = data
+      print(f"[IRC] <{user}> {text}")
+      message_queue.put(("irc_to_discord", f"<{user}> {text}"))
 
 def irc_bot(message_queue):
-  irc3.IrcBot(**config).run()
+  bot = irc3.IrcBot(**config)
+#  bot = irc3.IrcBot.from_config(config)
+
+  def send_from_discord(bot, message_queue):
+    while True:
+      try:
+        msg_type, msg = message_queue.get(block=True)
+        if msg_type == "discord_to_irc":
+          bot.privmsg(IRC_CHANNEL, msg)
+      except Exception as e:
+        print("Error sending to IRC:", e)
 
 
-#  client = irc.client.Reactor()
-#
-#
-#  def on_pubmsg(connection, event):
-#    user = event.source.nick
-#    text = event.arguments[0]
-#    print(f"[IRC] <{user}> {text}")
-#    message_queue.put(("irc_to_discord", f"<{user}> {text}"))
-#
-#  def send_from_discord():
-#    while True:
-#      try:
-#        msg_type, msg = message_queue.get(block=True)
-#        if msg_type == "discord_to_irc":
-#          client.connections[0].privmsg(IRC_CHANNEL, msg)
-#      except Exception as e:
-#        print("Error sending to IRC:", e)
-#
-#  try:
-#    c = client.server().connect(IRC_SERVER, IRC_PORT, IRC_BOT_NAME,
-#          password=IRC_PASSWORD,
-#          username=IRC_USERNAME,
-#          connect_factory=factory)
-#  except irc.client.ServerConnectionError as e:
-#    print("Connection failed: ", e)
-#    return
-#
-#  c.add_global_handler("welcome", on_connect)
-#  c.add_global_handler("join", on_join)
-#  c.add_global_handler("invite", on_invite)
-#  c.add_global_handler("pubmsg", on_pubmsg)
-#  c.add_global_handler("cap", on_cap)
-#  c.add_global_handler("authenticate", on_authenticate)
-#  c.add_global_handler("903", on_sasl_success)  # SASL success numeric
-#
-#  threading.Thread(target=send_from_discord, daemon=True).start()
-#
-#  client.process_forever()
+  threading.Thread(target=send_from_discord, args=(bot, message_queue), daemon=True).start()
+  bot.run(forever=True)
 
 intents = discord.Intents.default()
 intents.message_content = True
