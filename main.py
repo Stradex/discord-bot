@@ -110,6 +110,8 @@ async def on_message(message):
   global message_queue
   if message.author == discord_client.user:
     return
+  if message.channel.id != DISCORD_CHANNEL_ID:
+    return
   print(f"[DISCORD] <{message.author}> {message.content}")
   message_queue.put(("discord_to_irc", f"<{message.author}> {message.content}"))
 
